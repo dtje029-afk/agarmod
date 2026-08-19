@@ -45,15 +45,33 @@ if ($DylibPath -and (Test-Path $DylibPath)) {
     }
 }
 
-$outputZip = Join-Path $workspace "agario_dtje029.zip"
 $outputIpa = Join-Path $workspace "agario_dtje029.ipa"
 
-if (Test-Path $outputZip) { Remove-Item $outputZip -Force }
 if (Test-Path $outputIpa) { Remove-Item $outputIpa -Force }
 
-Write-Host "[+] Packaging Payload into agario_dtje029.ipa..." -ForegroundColor Green
-Compress-Archive -Path (Join-Path $workspace "Payload") -DestinationPath $outputZip -Force
-Move-Item $outputZip $outputIpa -Force
+Write-Host "[+] Packaging Payload into agario_dtje029.ipa (iOS format)..." -ForegroundColor Green
+
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+$payloadDir = Join-Path $workspace "Payload"
+$zipStream = [System.IO.File]::Create($outputIpa)
+$archive = New-Object System.IO.Compression.ZipArchive($zipStream, [System.IO.Compression.ZipArchiveMode]::Create)
+
+$files = Get-ChildItem -Path $payloadDir -Recurse -File
+foreach ($file in $files) {
+    # iOS / ESign requires standard UNIX forward slash paths
+    $relPath = $file.FullName.Substring($workspace.Length + 1).Replace('\', '/')
+    $entry = $archive.CreateEntry($relPath, [System.IO.Compression.CompressionLevel]::Optimal)
+    $entryStream = $entry.Open()
+    $fileStream = [System.IO.File]::OpenRead($file.FullName)
+    $fileStream.CopyTo($entryStream)
+    $fileStream.Dispose()
+    $entryStream.Dispose()
+}
+
+$archive.Dispose()
+$zipStream.Dispose()
 
 $ipaSize = [math]::Round(((Get-Item $outputIpa).Length / 1MB), 2)
 Write-Host "======================================" -ForegroundColor Cyan
