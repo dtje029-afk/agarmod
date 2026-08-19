@@ -36,13 +36,46 @@ jobs:
         make clean || true
         make package FINALPACKAGE=1
 
-    - name: Verify Payload
+    - name: Fetch base IPA
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        BASE_IPA_URL: ${{ secrets.BASE_IPA_URL }}
       run: |
+        set -euo pipefail
+        if [ -d "Payload/agar.io.app" ]; then
+          echo "Payload already present"
+        elif [ -f "base_agario.ipa" ]; then
+          echo "Unzipping base_agario.ipa from repo"
+          unzip -qo base_agario.ipa
+        else
+          mkdir -p _base
+          DOWNLOADED=""
+          if gh release download base -p "*.ipa" -D _base --repo "${{ github.repository }}" 2>/tmp/gh-base.err; then
+            DOWNLOADED=$(ls _base/*.ipa | head -n 1)
+            echo "Downloaded $DOWNLOADED from release 'base'"
+          elif [ -n "${BASE_IPA_URL:-}" ]; then
+            echo "Downloading BASE_IPA_URL"
+            curl -L --fail -o _base/base.ipa "$BASE_IPA_URL"
+            DOWNLOADED=_base/base.ipa
+          else
+            echo "ERROR: Geen base app."
+            echo "De IPA is te groot voor git (100MB limit). Doe EEN van deze:"
+            echo "1) GitHub → Releases → New release, tag: base, upload SharkMod/agar.io IPA"
+            echo "2) Repo Settings → Secrets → BASE_IPA_URL naar een directe download-link"
+            cat /tmp/gh-base.err || true
+            exit 1
+          fi
+          unzip -qo "$DOWNLOADED"
+        fi
+
         if [ ! -d "Payload/agar.io.app" ]; then
-          echo "ERROR: Payload/agar.io.app ontbreekt. Force-add de app (Payload staat in .gitignore) of commit een base IPA."
+          echo "ERROR: zip had geen Payload/agar.io.app"
+          find . -maxdepth 3 -name "*.app" || true
+          unzip -l _base/*.ipa 2>/dev/null | head || true
           exit 1
         fi
         echo "Payload verified: $(du -sh Payload)"
+        ls "Payload/agar.io.app/Frameworks" | head
 
     - name: Inject dylib
       run: |
