@@ -1,0 +1,85 @@
+name: Build IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Setup Theos
+      run: |
+        export THEOS=/opt/theos
+        git clone --recursive https://github.com/theos/theos.git $THEOS
+        echo "THEOS=$THEOS" >> $GITHUB_ENV
+
+    - name: Install dependencies
+      run: |
+        brew install ldid
+
+    - name: Build dylib
+      run: |
+        export THEOS=/opt/theos
+        make clean
+        make package FINALPACKAGE=1
+
+    - name: Prepare Payload
+      run: |
+        # Check if Payload exists, if not create structure
+        if [ ! -d "Payload/agar.io.app" ]; then
+          echo "Warning: Base app not found in Payload directory"
+          mkdir -p Payload/agar.io.app/Frameworks
+        fi
+
+    - name: Inject dylib
+      run: |
+        # Extract dylib from deb
+        DEB_FILE=$(ls packages/*.deb | head -n 1)
+        if [ -f "$DEB_FILE" ]; then
+          ar x "$DEB_FILE"
+          tar -xzf data.tar.* || tar -xzf data.tar.gz
+
+          # Copy dylib to Payload
+          mkdir -p Payload/agar.io.app/Frameworks
+          find ./Library/MobileSubstrate/DynamicLibraries -name "*.dylib" -exec cp {} Payload/agar.io.app/Frameworks/ \;
+          find ./Library/MobileSubstrate/DynamicLibraries -name "*.plist" -exec cp {} Payload/agar.io.app/Frameworks/ \;
+
+          echo "Dylib injected successfully"
+        fi
+
+    - name: Setup CydiaSubstrate
+      run: |
+        # Create CydiaSubstrate framework structure
+        mkdir -p Payload/agar.io.app/Frameworks/CydiaSubstrate.framework
+        echo "CydiaSubstrate framework structure created"
+
+    - name: Package IPA
+      run: |
+        # Create IPA
+        cd Payload
+        zip -r ../agario_dtje029.ipa .
+        cd ..
+        ls -lh agario_dtje029.ipa
+
+    - name: Upload IPA
+      uses: actions/upload-artifact@v3
+      with:
+        name: dtje029-agario-mod
+        path: agario_dtje029.ipa
+
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        files: agario_dtje029.ipa
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

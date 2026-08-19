@@ -1,0 +1,9 @@
+Package: com.dtje029.agario
+Name: dtje029 Agar.io Mod
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: dtje029 mod for Agar.io with in-game menu
+Maintainer: dtje029
+Author: dtje029
+Section: Tweaks
+Depends: mobilesubstrate

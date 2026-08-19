@@ -1,0 +1,23 @@
+# Theos
+.theos/
+packages/
+*.deb
+obj/
+
+# Build
+build/
+*.ipa
+*.dylib
+*.o
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Payload
+Payload/
+
+# Temp
+*.tmp
+temp/
