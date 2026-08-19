@@ -7,6 +7,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -35,6 +38,15 @@ jobs:
         export THEOS=$HOME/theos
         make clean || true
         make package FINALPACKAGE=1
+
+    - name: Upload Tweak Binaries (deb & dylib)
+      uses: actions/upload-artifact@v4
+      with:
+        name: dtje029mod-tweak-binaries
+        path: |
+          packages/*.deb
+          .theos/obj/*.dylib
+        if-no-files-found: warn
 
     - name: Fetch base IPA
       env:
@@ -150,7 +162,7 @@ jobs:
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: v1.0.${{ github.run_number }}
         name: dtje029 Agar.io Mod v1.0.${{ github.run_number }}
