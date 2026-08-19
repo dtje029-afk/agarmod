@@ -90,29 +90,6 @@ static UIWindow* getKeyWindow(void) {
     UIWindow *window = getKeyWindow();
     if (!window) return;
 
-    CGFloat btnSize = 52.0;
-    self.menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    self.menuButton.frame = CGRectMake(window.frame.size.width - btnSize - 18, 120, btnSize, btnSize);
-    self.menuButton.layer.cornerRadius = 14.0;
-    self.menuButton.clipsToBounds = YES;
-    self.menuButton.layer.borderWidth = 1.5;
-    self.menuButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.35].CGColor;
-    
-    // Shadow
-    self.menuButton.layer.shadowColor = [UIColor blackColor].CGColor;
-    self.menuButton.layer.shadowOffset = CGSizeMake(0, 4);
-    self.menuButton.layer.shadowOpacity = 0.5;
-    self.menuButton.layer.shadowRadius = 6;
-    self.menuButton.layer.masksToBounds = NO;
-
-    UIImageView *iconView = [[UIImageView alloc] initWithFrame:self.menuButton.bounds];
-    iconView.image = [self phLogoImage];
-- (void)createFloatingButton {
-    if (self.menuButton) return;
-
-    UIWindow *window = getKeyWindow();
-    if (!window) return;
-
     CGFloat btnSize = 48.0;
     self.menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
     self.menuButton.frame = CGRectMake(window.frame.size.width - btnSize - 16, 120, btnSize, btnSize);
