@@ -6,7 +6,7 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = dtje029mod
 
 dtje029mod_FILES = Tweak.x
-dtje029mod_CFLAGS = -fobjc-arc
+dtje029mod_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
 dtje029mod_FRAMEWORKS = UIKit Foundation QuartzCore
 
 include $(THEOS_MAKE_PATH)/tweak.mk
