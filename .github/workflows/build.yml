@@ -70,7 +70,7 @@ jobs:
         ls -lh agario_dtje029.ipa
 
     - name: Upload IPA
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dtje029-agario-mod
         path: agario_dtje029.ipa
