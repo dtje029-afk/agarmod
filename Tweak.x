@@ -7,6 +7,37 @@ static UIButton *menuButton = nil;
 static UIView *menuView = nil;
 static BOOL menuVisible = NO;
 
+// Helper function to get the key window
+static UIWindow* getKeyWindow() {
+    UIWindow *keyWindow = nil;
+
+    if (@available(iOS 13.0, *)) {
+        NSSet<UIScene *> *scenes = [[UIApplication sharedApplication] connectedScenes];
+        for (UIScene *scene in scenes) {
+            if ([scene isKindOfClass:[UIWindowScene class]]) {
+                UIWindowScene *windowScene = (UIWindowScene *)scene;
+                for (UIWindow *window in windowScene.windows) {
+                    if (window.isKeyWindow) {
+                        keyWindow = window;
+                        break;
+                    }
+                }
+            }
+            if (keyWindow) break;
+        }
+    }
+
+    if (!keyWindow) {
+        keyWindow = [[UIApplication sharedApplication] keyWindow];
+    }
+
+    if (!keyWindow) {
+        keyWindow = [[[UIApplication sharedApplication] windows] firstObject];
+    }
+
+    return keyWindow;
+}
+
 @interface MenuManager : NSObject
 + (instancetype)sharedInstance;
 - (void)createMenuButton;
@@ -31,16 +62,15 @@ static BOOL menuVisible = NO;
 - (void)createMenuButton {
     if (menuButton) return;
 
-    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-    if (!keyWindow) {
-        keyWindow = [UIApplication sharedApplication].windows.firstObject;
+    UIWindow *window = getKeyWindow();
+    if (!window) {
+        NSLog(@"[dtje029] Failed to get key window");
+        return;
     }
-
-    if (!keyWindow) return;
 
     // Create floating button
     menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    menuButton.frame = CGRectMake(keyWindow.frame.size.width - 70, 100, 60, 60);
+    menuButton.frame = CGRectMake(window.frame.size.width - 70, 100, 60, 60);
     menuButton.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:0.9];
     menuButton.layer.cornerRadius = 30;
     menuButton.layer.borderWidth = 2;
@@ -60,7 +90,7 @@ static BOOL menuVisible = NO;
     UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
     [menuButton addGestureRecognizer:panGesture];
 
-    [keyWindow addSubview:menuButton];
+    [window addSubview:menuButton];
     menuButton.layer.zPosition = 999;
 
     NSLog(@"[dtje029] Menu button created");
@@ -86,13 +116,11 @@ static BOOL menuVisible = NO;
 
     menuVisible = YES;
 
-    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
-    if (!keyWindow) {
-        keyWindow = [UIApplication sharedApplication].windows.firstObject;
-    }
+    UIWindow *window = getKeyWindow();
+    if (!window) return;
 
     // Create menu view
-    menuView = [[UIView alloc] initWithFrame:CGRectMake(20, 100, keyWindow.frame.size.width - 40, 400)];
+    menuView = [[UIView alloc] initWithFrame:CGRectMake(20, 100, window.frame.size.width - 40, 400)];
     menuView.backgroundColor = [UIColor colorWithWhite:0.1 alpha:0.95];
     menuView.layer.cornerRadius = 15;
     menuView.layer.borderWidth = 2;
@@ -133,7 +161,7 @@ static BOOL menuVisible = NO;
     infoLabel.textAlignment = NSTextAlignmentCenter;
     [menuView addSubview:infoLabel];
 
-    [keyWindow addSubview:menuView];
+    [window addSubview:menuView];
     menuView.layer.zPosition = 998;
 
     NSLog(@"[dtje029] Menu opened");
@@ -174,8 +202,11 @@ static BOOL menuVisible = NO;
 - (void)applicationDidBecomeActive:(UIApplication *)application {
     %orig;
 
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [[MenuManager sharedInstance] createMenuButton];
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [[MenuManager sharedInstance] createMenuButton];
+        });
     });
 }
 
@@ -183,5 +214,4 @@ static BOOL menuVisible = NO;
 
 %ctor {
     NSLog(@"[dtje029] Tweak initialized for agar.io");
-    NSLog(@"[dtje029] Menu will appear 3 seconds after app becomes active");
 }
