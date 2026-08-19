@@ -200,36 +200,34 @@ static UIWindow* getKeyWindow() {
 static void scheduleMenu(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             [[MenuManager sharedInstance] createMenuButton];
         });
     });
 }
 
-%group AppDelegateHooks
-%hook AppDelegate
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-    BOOL ok = %orig;
-    scheduleMenu();
-    return ok;
-}
+__attribute__((constructor))
+static void dtje029mod_init(void) {
+    NSLog(@"[dtje029] Tweak initialized for agar.io (no substrate dependency)");
+    
+    // Listen for app launch / active state to display menu button
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidFinishLaunchingNotification
+                                                      object:nil
+                                                       queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(__unused NSNotification *note) {
+        scheduleMenu();
+    }];
 
-- (void)applicationDidBecomeActive:(UIApplication *)application {
-    %orig;
-    scheduleMenu();
-}
-%end
-%end
-
-%ctor {
-    NSLog(@"[dtje029] Tweak initialized for agar.io");
-    if (objc_getClass("AppDelegate")) {
-        %init(AppDelegateHooks);
-    }
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
                                                       object:nil
                                                        queue:[NSOperationQueue mainQueue]
                                                   usingBlock:^(__unused NSNotification *note) {
         scheduleMenu();
     }];
+
+    // Also trigger after delay in case notifications already fired
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        scheduleMenu();
+    });
 }
+

@@ -44,6 +44,8 @@ jobs:
         mkdir -p build_output
         DYLIB=$(find .theos/obj packages -name "dtje029mod.dylib" 2>/dev/null | head -n 1 || true)
         if [ -n "$DYLIB" ] && [ -f "$DYLIB" ]; then
+          install_name_tool -id "@rpath/dtje029mod.dylib" "$DYLIB" || true
+          ldid -S "$DYLIB" || true
           cp "$DYLIB" build_output/dtje029mod.dylib
           cp "$DYLIB" build_output/sharkmod.dylib
         fi
