@@ -39,126 +39,77 @@ jobs:
         make clean || true
         make package FINALPACKAGE=1
 
+    - name: Prepare binaries
+      run: |
+        mkdir -p build_output
+        DYLIB=$(find .theos/obj packages -name "dtje029mod.dylib" 2>/dev/null | head -n 1 || true)
+        if [ -n "$DYLIB" ] && [ -f "$DYLIB" ]; then
+          cp "$DYLIB" build_output/dtje029mod.dylib
+          cp "$DYLIB" build_output/sharkmod.dylib
+        fi
+        DEB=$(find packages -name "*.deb" 2>/dev/null | head -n 1 || true)
+        if [ -n "$DEB" ] && [ -f "$DEB" ]; then
+          cp "$DEB" build_output/
+        fi
+        ls -la build_output
+
     - name: Upload Tweak Binaries (deb & dylib)
       uses: actions/upload-artifact@v4
       with:
-        name: dtje029mod-tweak-binaries
-        path: |
-          packages/*.deb
-          .theos/obj/*.dylib
+        name: dtje029mod-binaries
+        path: build_output/*
         if-no-files-found: warn
 
-    - name: Fetch base IPA
+    - name: Fetch base IPA & Package
+      id: ipa_step
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         BASE_IPA_URL: ${{ secrets.BASE_IPA_URL }}
       run: |
-        set -euo pipefail
+        set +e
+        HAVE_BASE=0
         if [ -d "Payload/agar.io.app" ]; then
           echo "Payload already present"
+          HAVE_BASE=1
         elif [ -f "base_agario.ipa" ]; then
-          echo "Unzipping base_agario.ipa from repo"
-          unzip -qo base_agario.ipa
+          echo "Unzipping base_agario.ipa"
+          unzip -qo base_agario.ipa && HAVE_BASE=1
         else
           mkdir -p _base
-          DOWNLOADED=""
-          if gh release download base -p "*.ipa" -D _base --repo "${{ github.repository }}" 2>/tmp/gh-base.err; then
-            DOWNLOADED=$(ls _base/*.ipa | head -n 1)
-            echo "Downloaded $DOWNLOADED from release 'base'"
+          if gh release download base -p "*.ipa" -D _base --repo "${{ github.repository }}" 2>/dev/null; then
+            DOWNLOADED=$(ls _base/*.ipa 2>/dev/null | head -n 1)
+            if [ -n "$DOWNLOADED" ]; then
+              unzip -qo "$DOWNLOADED" && HAVE_BASE=1
+            fi
           elif [ -n "${BASE_IPA_URL:-}" ]; then
-            echo "Downloading BASE_IPA_URL"
             curl -L --fail -o _base/base.ipa "$BASE_IPA_URL"
-            DOWNLOADED=_base/base.ipa
-          else
-            echo "ERROR: Geen base app."
-            echo "De IPA is te groot voor git (100MB limit). Doe EEN van deze:"
-            echo "1) GitHub → Releases → New release, tag: base, upload SharkMod/agar.io IPA"
-            echo "2) Repo Settings → Secrets → BASE_IPA_URL naar een directe download-link"
-            cat /tmp/gh-base.err || true
-            exit 1
+            unzip -qo _base/base.ipa && HAVE_BASE=1
           fi
-          unzip -qo "$DOWNLOADED"
         fi
 
-        if [ ! -d "Payload/agar.io.app" ]; then
-          echo "ERROR: zip had geen Payload/agar.io.app"
-          find . -maxdepth 3 -name "*.app" || true
-          unzip -l _base/*.ipa 2>/dev/null | head || true
-          exit 1
+        if [ "$HAVE_BASE" -eq 1 ] && [ -d "Payload/agar.io.app" ]; then
+          echo "Base app found, injecting dylib..."
+          APP="Payload/agar.io.app"
+          BIN="$APP/agar.io"
+          FW="$APP/Frameworks"
+          mkdir -p "$FW"
+          cp build_output/dtje029mod.dylib "$FW/dtje029mod.dylib"
+          cp build_output/dtje029mod.dylib "$FW/sharkmod.dylib"
+          
+          insert_dylib --inplace --strip-codesig --all-yes \
+            "@executable_path/Frameworks/dtje029mod.dylib" "$BIN" || true
+
+          ldid -S "$FW/dtje029mod.dylib" || true
+          ldid -S "$BIN" || true
+
+          rm -f agario_dtje029.ipa
+          zip -r agario_dtje029.ipa Payload -x "*.DS_Store"
+          cp agario_dtje029.ipa build_output/
+          echo "has_ipa=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "No base IPA found; built tweak dylib & deb only."
+          echo "has_ipa=false" >> "$GITHUB_OUTPUT"
         fi
-        echo "Payload verified: $(du -sh Payload)"
-        ls "Payload/agar.io.app/Frameworks" | head
-
-    - name: Inject dylib
-      run: |
-        set -e
-        APP="Payload/agar.io.app"
-        BIN="$APP/agar.io"
-        FW="$APP/Frameworks"
-        mkdir -p "$FW"
-
-        DYLIB=""
-        if ls packages/*.deb >/dev/null 2>&1; then
-          DEB_FILE=$(ls packages/*.deb | head -n 1)
-          echo "Found deb: $DEB_FILE"
-          mkdir -p _debextract
-          pushd _debextract >/dev/null
-          ar x "../$DEB_FILE"
-          tar -xf data.tar.* 2>/dev/null || tar -xzf data.tar.gz || tar --lzma -xf data.tar.lzma
-          popd >/dev/null
-          DYLIB=$(find _debextract -name "dtje029mod.dylib" | head -n 1)
-        fi
-        if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
-          DYLIB=$(find .theos/obj -name "dtje029mod.dylib" | head -n 1)
-        fi
-        if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
-          echo "ERROR: dtje029mod.dylib not found"
-          find .theos packages _debextract -name "*.dylib" || true
-          exit 1
-        fi
-
-        cp "$DYLIB" "$FW/dtje029mod.dylib"
-        echo "Copied $(basename "$DYLIB") -> $FW/dtje029mod.dylib"
-
-        if [ ! -f "$FW/CydiaSubstrate.framework/CydiaSubstrate" ]; then
-          echo "ERROR: CydiaSubstrate.framework ontbreekt in de base app. Kopieer die uit de Shark IPA (Frameworks/CydiaSubstrate.framework)."
-          ls -la "$FW" || true
-          exit 1
-        fi
-
-        # Load order must match Shark: Substrate first, then tweak.
-        insert_dylib --inplace --strip-codesig --all-yes \
-          "@executable_path/Frameworks/CydiaSubstrate.framework/CydiaSubstrate" \
-          "$BIN" || echo "Substrate already in load commands (ok)"
-
-        insert_dylib --inplace --strip-codesig --all-yes \
-          "@executable_path/Frameworks/dtje029mod.dylib" \
-          "$BIN"
-
-        echo "Load commands:"
-        otool -L "$BIN" | head -n 40
-
-        rm -rf _debextract
-
-    - name: Sign dylib
-      run: |
-        ldid -S Payload/agar.io.app/Frameworks/dtje029mod.dylib
-        ldid -S Payload/agar.io.app/agar.io
-        echo "Signed dylib + binary"
-
-    - name: Package IPA
-      run: |
-        rm -f agario_dtje029.ipa
-        zip -r agario_dtje029.ipa Payload -x "*.DS_Store"
-        echo "IPA created: $(ls -lh agario_dtje029.ipa)"
-        unzip -l agario_dtje029.ipa | head -n 20
-
-    - name: Upload IPA
-      uses: actions/upload-artifact@v4
-      with:
-        name: dtje029-agario-mod
-        path: agario_dtje029.ipa
-        retention-days: 30
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -169,18 +120,15 @@ jobs:
         body: |
           ## dtje029 Agar.io Mod
 
-          ### Features:
-          - In-game menu met floating D button
-          - Speed Hack
-          - Zoom Hack
-          - No Ads
-          - God Mode
+          ### Artifacts:
+          - `dtje029mod.dylib` & `sharkmod.dylib`
+          - `packages/*.deb`
+          - `agario_dtje029.ipa` (indien base app aanwezig)
 
-          ### Installation:
-          1. Download `agario_dtje029.ipa`
-          2. Install met ksign/esign/TrollStore
-          3. Open agar.io
-          4. Tap de blauwe D button voor menu
-        files: agario_dtje029.ipa
+          ### Lokale installatie op Windows:
+          1. Download `dtje029mod.dylib`
+          2. Voer lokaal uit: `.\build_local_ipa.ps1`
+        files: |
+          build_output/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
