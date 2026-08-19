@@ -8,13 +8,12 @@ static NSString *const kPHLogoBase64 =
     @"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";
 
 static UIWindow* getKeyWindow(void) {
-    UIWindow *keyWindow = nil;
     if (@available(iOS 13.0, *)) {
         for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
             if ([scene isKindOfClass:[UIWindowScene class]]) {
                 UIWindowScene *windowScene = (UIWindowScene *)scene;
                 for (UIWindow *window in windowScene.windows) {
-                    if (window.isKeyWindow || window == windowScene.keyWindow) {
+                    if (window.isKeyWindow) {
                         return window;
                     }
                 }
@@ -24,7 +23,7 @@ static UIWindow* getKeyWindow(void) {
             }
         }
     }
-    keyWindow = [UIApplication sharedApplication].keyWindow;
+    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
     if (!keyWindow && [UIApplication sharedApplication].windows.count > 0) {
         keyWindow = [UIApplication sharedApplication].windows.firstObject;
     }
