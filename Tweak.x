@@ -1,6 +1,7 @@
 // Agar.io dtje029 Menu Tweak
 #import <UIKit/UIKit.h>
 #import <Foundation/Foundation.h>
+#import <objc/runtime.h>
 
 // Menu variables
 static UIButton *menuButton = nil;
@@ -196,12 +197,7 @@ static UIWindow* getKeyWindow() {
 
 @end
 
-// Hook to inject menu when app launches
-%hook UIApplication
-
-- (void)applicationDidBecomeActive:(UIApplication *)application {
-    %orig;
-
+static void scheduleMenu(void) {
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -210,8 +206,30 @@ static UIWindow* getKeyWindow() {
     });
 }
 
+%group AppDelegateHooks
+%hook AppDelegate
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+    BOOL ok = %orig;
+    scheduleMenu();
+    return ok;
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    %orig;
+    scheduleMenu();
+}
+%end
 %end
 
 %ctor {
     NSLog(@"[dtje029] Tweak initialized for agar.io");
+    if (objc_getClass("AppDelegate")) {
+        %init(AppDelegateHooks);
+    }
+    [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
+                                                      object:nil
+                                                       queue:[NSOperationQueue mainQueue]
+                                                  usingBlock:^(__unused NSNotification *note) {
+        scheduleMenu();
+    }];
 }

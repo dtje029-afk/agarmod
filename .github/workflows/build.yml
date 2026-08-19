@@ -18,12 +18,17 @@ jobs:
     - name: Setup Theos
       run: |
         export THEOS=$HOME/theos
-        git clone --recursive https://github.com/theos/theos.git $THEOS
-        echo "THEOS=$THEOS" >> $GITHUB_ENV
+        git clone --depth 1 --recursive https://github.com/theos/theos.git "$THEOS"
+        echo "THEOS=$THEOS" >> "$GITHUB_ENV"
 
     - name: Install dependencies
       run: |
         brew install ldid
+        git clone --depth 1 https://github.com/tyilo/insert_dylib.git "$HOME/insert_dylib"
+        xcodebuild -project "$HOME/insert_dylib/insert_dylib.xcodeproj" -configuration Release -quiet
+        BIN=$(find "$HOME/insert_dylib" -type f -name insert_dylib | head -n 1)
+        sudo cp "$BIN" /usr/local/bin/insert_dylib
+        insert_dylib --help >/dev/null || true
 
     - name: Build dylib
       run: |
@@ -34,57 +39,74 @@ jobs:
     - name: Verify Payload
       run: |
         if [ ! -d "Payload/agar.io.app" ]; then
-          echo "ERROR: Base app not found in Payload directory!"
+          echo "ERROR: Payload/agar.io.app ontbreekt. Force-add de app (Payload staat in .gitignore) of commit een base IPA."
           exit 1
         fi
         echo "Payload verified: $(du -sh Payload)"
 
     - name: Inject dylib
       run: |
-        # Extract dylib from deb
-        DEB_FILE=$(ls packages/*.deb 2>/dev/null | head -n 1)
-        if [ -f "$DEB_FILE" ]; then
+        set -e
+        APP="Payload/agar.io.app"
+        BIN="$APP/agar.io"
+        FW="$APP/Frameworks"
+        mkdir -p "$FW"
+
+        DYLIB=""
+        if ls packages/*.deb >/dev/null 2>&1; then
+          DEB_FILE=$(ls packages/*.deb | head -n 1)
           echo "Found deb: $DEB_FILE"
-          ar x "$DEB_FILE"
-          tar -xzf data.tar.* 2>/dev/null || tar -xzf data.tar.gz || tar -xzf data.tar.lzma
-
-          # Copy dylib to Payload
-          mkdir -p Payload/agar.io.app/Frameworks
-          DYLIB=$(find ./Library/MobileSubstrate/DynamicLibraries -name "*.dylib" 2>/dev/null | head -n 1)
-          if [ -f "$DYLIB" ]; then
-            cp "$DYLIB" Payload/agar.io.app/Frameworks/
-            echo "Dylib injected: $(basename $DYLIB)"
-            ls -lh Payload/agar.io.app/Frameworks/*.dylib
-          fi
-
-          # Copy plist if exists
-          PLIST=$(find ./Library/MobileSubstrate/DynamicLibraries -name "*.plist" 2>/dev/null | head -n 1)
-          if [ -f "$PLIST" ]; then
-            cp "$PLIST" Payload/agar.io.app/Frameworks/
-            echo "Plist copied: $(basename $PLIST)"
-          fi
-
-          # Cleanup
-          rm -f control.tar.* data.tar.* debian-binary
-        else
-          echo "ERROR: No deb file found!"
+          mkdir -p _debextract
+          pushd _debextract >/dev/null
+          ar x "../$DEB_FILE"
+          tar -xf data.tar.* 2>/dev/null || tar -xzf data.tar.gz || tar --lzma -xf data.tar.lzma
+          popd >/dev/null
+          DYLIB=$(find _debextract -name "dtje029mod.dylib" | head -n 1)
+        fi
+        if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
+          DYLIB=$(find .theos/obj -name "dtje029mod.dylib" | head -n 1)
+        fi
+        if [ -z "$DYLIB" ] || [ ! -f "$DYLIB" ]; then
+          echo "ERROR: dtje029mod.dylib not found"
+          find .theos packages _debextract -name "*.dylib" || true
           exit 1
         fi
 
+        cp "$DYLIB" "$FW/dtje029mod.dylib"
+        echo "Copied $(basename "$DYLIB") -> $FW/dtje029mod.dylib"
+
+        if [ ! -f "$FW/CydiaSubstrate.framework/CydiaSubstrate" ]; then
+          echo "ERROR: CydiaSubstrate.framework ontbreekt in de base app. Kopieer die uit de Shark IPA (Frameworks/CydiaSubstrate.framework)."
+          ls -la "$FW" || true
+          exit 1
+        fi
+
+        # Load order must match Shark: Substrate first, then tweak.
+        insert_dylib --inplace --strip-codesig --all-yes \
+          "@executable_path/Frameworks/CydiaSubstrate.framework/CydiaSubstrate" \
+          "$BIN" || echo "Substrate already in load commands (ok)"
+
+        insert_dylib --inplace --strip-codesig --all-yes \
+          "@executable_path/Frameworks/dtje029mod.dylib" \
+          "$BIN"
+
+        echo "Load commands:"
+        otool -L "$BIN" | head -n 40
+
+        rm -rf _debextract
+
     - name: Sign dylib
       run: |
-        DYLIB=$(find Payload/agar.io.app/Frameworks -name "*.dylib" | grep -v CydiaSubstrate | head -n 1)
-        if [ -f "$DYLIB" ]; then
-          ldid -S "$DYLIB"
-          echo "Signed: $DYLIB"
-        fi
+        ldid -S Payload/agar.io.app/Frameworks/dtje029mod.dylib
+        ldid -S Payload/agar.io.app/agar.io
+        echo "Signed dylib + binary"
 
     - name: Package IPA
       run: |
-        cd Payload
-        zip -r ../agario_dtje029.ipa . -x "*.DS_Store"
-        cd ..
+        rm -f agario_dtje029.ipa
+        zip -r agario_dtje029.ipa Payload -x "*.DS_Store"
         echo "IPA created: $(ls -lh agario_dtje029.ipa)"
+        unzip -l agario_dtje029.ipa | head -n 20
 
     - name: Upload IPA
       uses: actions/upload-artifact@v4
@@ -103,17 +125,17 @@ jobs:
           ## dtje029 Agar.io Mod
 
           ### Features:
-          - 🎮 In-game menu met floating "D" button
-          - ⚡ Speed Hack
-          - 🔍 Zoom Hack
-          - 🚫 No Ads
-          - 💪 God Mode
+          - In-game menu met floating D button
+          - Speed Hack
+          - Zoom Hack
+          - No Ads
+          - God Mode
 
           ### Installation:
           1. Download `agario_dtje029.ipa`
           2. Install met ksign/esign/TrollStore
           3. Open agar.io
-          4. Tap de blauwe "D" button voor menu!
+          4. Tap de blauwe D button voor menu
         files: agario_dtje029.ipa
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

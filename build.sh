@@ -44,11 +44,10 @@ if [ -f "$DEB_FILE" ]; then
     ar x "$DEB_FILE"
     tar -xzf data.tar.* 2>/dev/null || tar -xzf data.tar.gz
 
-    # Find and copy the dylib
-    DYLIB_PATH=$(find ./Library/MobileSubstrate/DynamicLibraries -name "*.dylib" 2>/dev/null | head -n 1)
+    DYLIB_PATH=$(find ./Library/MobileSubstrate/DynamicLibraries -name "dtje029mod.dylib" 2>/dev/null | head -n 1)
     if [ -f "$DYLIB_PATH" ]; then
-        cp "$DYLIB_PATH" "$FRAMEWORKS_DIR/"
-        echo "Dylib copied to Frameworks"
+        cp "$DYLIB_PATH" "$FRAMEWORKS_DIR/dtje029mod.dylib"
+        echo "Dylib copied to Frameworks/dtje029mod.dylib"
     fi
 
     # Copy plist if exists
@@ -62,14 +61,21 @@ if [ -f "$DEB_FILE" ]; then
     rm -f control.tar.* data.tar.* debian-binary
 fi
 
-# Setup CydiaSubstrate if not present
-if [ ! -d "$FRAMEWORKS_DIR/CydiaSubstrate.framework" ]; then
-    echo "Setting up CydiaSubstrate framework..."
-    mkdir -p "$FRAMEWORKS_DIR/CydiaSubstrate.framework"
-    # You would need to add CydiaSubstrate files here
+if [ ! -f "$FRAMEWORKS_DIR/CydiaSubstrate.framework/CydiaSubstrate" ]; then
+    echo "ERROR: CydiaSubstrate.framework missing in base app"
+    exit 1
 fi
 
-# Create IPA
+# Inject like Shark: Substrate first, then tweak (idempotent if already present)
+echo "Injecting load commands..."
+insert_dylib --inplace --strip-codesig --all-yes \
+  "@executable_path/Frameworks/CydiaSubstrate.framework/CydiaSubstrate" \
+  "$APP_DIR/agar.io" || true
+insert_dylib --inplace --strip-codesig --all-yes \
+  "@executable_path/Frameworks/dtje029mod.dylib" \
+  "$APP_DIR/agar.io" || true
+
+# Create IPA (Payload must be the zip root)
 echo "Creating IPA..."
 zip -qr "$OUTPUT_IPA" Payload
 
