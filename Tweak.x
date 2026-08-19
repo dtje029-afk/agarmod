@@ -107,13 +107,36 @@ static UIWindow* getKeyWindow(void) {
 
     UIImageView *iconView = [[UIImageView alloc] initWithFrame:self.menuButton.bounds];
     iconView.image = [self phLogoImage];
+- (void)createFloatingButton {
+    if (self.menuButton) return;
+
+    UIWindow *window = getKeyWindow();
+    if (!window) return;
+
+    CGFloat btnSize = 48.0;
+    self.menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.menuButton.frame = CGRectMake(window.frame.size.width - btnSize - 16, 120, btnSize, btnSize);
+    self.menuButton.layer.cornerRadius = 12.0;
+    self.menuButton.clipsToBounds = YES;
+    self.menuButton.layer.borderWidth = 1.0;
+    self.menuButton.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.3].CGColor;
+    
+    // Shadow
+    self.menuButton.layer.shadowColor = [UIColor blackColor].CGColor;
+    self.menuButton.layer.shadowOffset = CGSizeMake(0, 3);
+    self.menuButton.layer.shadowOpacity = 0.45;
+    self.menuButton.layer.shadowRadius = 5;
+    self.menuButton.layer.masksToBounds = NO;
+
+    UIImageView *iconView = [[UIImageView alloc] initWithFrame:self.menuButton.bounds];
+    iconView.image = [self phLogoImage];
     iconView.contentMode = UIViewContentModeScaleAspectFill;
-    iconView.layer.cornerRadius = 14.0;
+    iconView.layer.cornerRadius = 12.0;
     iconView.clipsToBounds = YES;
     iconView.userInteractionEnabled = NO;
     [self.menuButton addSubview:iconView];
 
-    [self.menuButton addTarget:self action:@selector(toggleMenu) forControlEvents:UIControlEventTouchUpInside];
+    [self.menuButton addTarget:self action:@selector(openMenu) forControlEvents:UIControlEventTouchUpInside];
 
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleButtonPan:)];
     [self.menuButton addGestureRecognizer:pan];
@@ -145,38 +168,42 @@ static UIWindow* getKeyWindow(void) {
 }
 
 - (void)openMenu {
-    if (self.menuContainer) {
-        self.menuContainer.hidden = NO;
-        self.isMenuOpen = YES;
-        return;
-    }
+    if (self.isMenuOpen && self.menuContainer) return;
 
     UIWindow *window = getKeyWindow();
     if (!window) return;
 
     self.isMenuOpen = YES;
-    CGFloat width = 250.0;
-    CGFloat height = 340.0;
-    CGFloat posX = MAX(20, window.frame.size.width - width - 30);
-    CGFloat posY = 90.0;
+
+    // Hide floating button while menu is open
+    [UIView animateWithDuration:0.15 animations:^{
+        self.menuButton.alpha = 0.0;
+    } completion:^(BOOL finished) {
+        self.menuButton.hidden = YES;
+    }];
+
+    CGFloat width = 230.0;
+    CGFloat height = 312.0;
+    CGFloat posX = MAX(16, window.frame.size.width - width - 20);
+    CGFloat posY = 70.0;
 
     self.menuContainer = [[UIView alloc] initWithFrame:CGRectMake(posX, posY, width, height)];
-    self.menuContainer.backgroundColor = [UIColor colorWithRed:0.12 green:0.12 blue:0.14 alpha:0.94];
+    self.menuContainer.backgroundColor = [UIColor colorWithRed:0.13 green:0.13 blue:0.15 alpha:0.96];
     self.menuContainer.layer.cornerRadius = 14.0;
     self.menuContainer.layer.borderWidth = 1.0;
-    self.menuContainer.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.18].CGColor;
+    self.menuContainer.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.2].CGColor;
     self.menuContainer.clipsToBounds = YES;
 
     // Header View
     UIView *headerView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, width, 44)];
-    headerView.backgroundColor = [UIColor colorWithRed:0.08 green:0.08 blue:0.09 alpha:0.96];
+    headerView.backgroundColor = [UIColor colorWithRed:0.09 green:0.09 blue:0.10 alpha:0.98];
 
     UIPanGestureRecognizer *menuPan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleMenuPan:)];
     [headerView addGestureRecognizer:menuPan];
 
-    // Back Button (shown only in subtabs)
-    self.backButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.backButton.frame = CGRectMake(8, 7, 30, 30);
+    // Back Button (‹)
+    self.backButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    self.backButton.frame = CGRectMake(6, 4, 36, 36);
     [self.backButton setTitle:@"‹" forState:UIControlStateNormal];
     self.backButton.titleLabel.font = [UIFont boldSystemFontOfSize:26];
     [self.backButton setTitleColor:[UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:1.0] forState:UIControlStateNormal];
@@ -188,22 +215,22 @@ static UIWindow* getKeyWindow(void) {
     self.titleLabel = [[UILabel alloc] initWithFrame:CGRectMake(40, 0, width - 80, 44)];
     self.titleLabel.text = @"@dtje029";
     self.titleLabel.textColor = [UIColor whiteColor];
-    self.titleLabel.font = [UIFont boldSystemFontOfSize:16];
+    self.titleLabel.font = [UIFont fontWithName:@"HelveticaNeue-Medium" size:16] ?: [UIFont boldSystemFontOfSize:16];
     self.titleLabel.textAlignment = NSTextAlignmentCenter;
     [headerView addSubview:self.titleLabel];
 
-    // Close Button ✕
-    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    closeBtn.frame = CGRectMake(width - 38, 7, 30, 30);
+    // Close Button (✕)
+    UIButton *closeBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+    closeBtn.frame = CGRectMake(width - 40, 4, 36, 36);
     [closeBtn setTitle:@"✕" forState:UIControlStateNormal];
-    closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:17];
+    closeBtn.titleLabel.font = [UIFont boldSystemFontOfSize:16];
     [closeBtn setTitleColor:[UIColor colorWithWhite:0.85 alpha:1.0] forState:UIControlStateNormal];
     [closeBtn addTarget:self action:@selector(closeMenu) forControlEvents:UIControlEventTouchUpInside];
     [headerView addSubview:closeBtn];
 
     // Header divider line
     UIView *divider = [[UIView alloc] initWithFrame:CGRectMake(0, 43.5, width, 0.5)];
-    divider.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.18];
+    divider.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.15];
     [headerView addSubview:divider];
 
     [self.menuContainer addSubview:headerView];
@@ -219,7 +246,7 @@ static UIWindow* getKeyWindow(void) {
     self.menuContainer.layer.zPosition = 9998;
 
     // Pop-in animation
-    self.menuContainer.transform = CGAffineTransformMakeScale(0.92, 0.92);
+    self.menuContainer.transform = CGAffineTransformMakeScale(0.9, 0.9);
     self.menuContainer.alpha = 0.0;
     [UIView animateWithDuration:0.2 delay:0 options:UIViewAnimationOptionCurveEaseOut animations:^{
         self.menuContainer.transform = CGAffineTransformIdentity;
@@ -229,9 +256,13 @@ static UIWindow* getKeyWindow(void) {
 
 - (void)closeMenu {
     if (!self.menuContainer) return;
-    [UIView animateWithDuration:0.15 animations:^{
+    
+    // Show floating button again
+    self.menuButton.hidden = NO;
+    [UIView animateWithDuration:0.2 animations:^{
+        self.menuButton.alpha = 1.0;
         self.menuContainer.alpha = 0.0;
-        self.menuContainer.transform = CGAffineTransformMakeScale(0.92, 0.92);
+        self.menuContainer.transform = CGAffineTransformMakeScale(0.9, 0.9);
     } completion:^(BOOL finished) {
         [self.menuContainer removeFromSuperview];
         self.menuContainer = nil;
@@ -256,12 +287,12 @@ static UIWindow* getKeyWindow(void) {
         @"Macro",
         @"Indicators",
         @"Party",
-        @"Visuals",
-        @"About"
+        @"Visuals"
     ];
 
     UIScrollView *scrollView = [[UIScrollView alloc] initWithFrame:self.contentView.bounds];
-    scrollView.alwaysBounceVertical = YES;
+    scrollView.showsVerticalScrollIndicator = NO;
+    scrollView.alwaysBounceVertical = NO;
 
     CGFloat rowHeight = 44.0;
     CGFloat y = 0.0;
@@ -271,21 +302,21 @@ static UIWindow* getKeyWindow(void) {
 
         UIButton *rowBtn = [UIButton buttonWithType:UIButtonTypeCustom];
         rowBtn.frame = CGRectMake(0, y, self.contentView.frame.size.width, rowHeight);
-        rowBtn.backgroundColor = (i % 2 == 0) ? [UIColor colorWithWhite:0.15 alpha:0.5] : [UIColor colorWithWhite:0.12 alpha:0.5];
+        rowBtn.backgroundColor = [UIColor colorWithRed:0.15 green:0.15 blue:0.17 alpha:0.9];
         rowBtn.tag = i;
         [rowBtn addTarget:self action:@selector(onCategorySelected:) forControlEvents:UIControlEventTouchUpInside];
 
         // Category Label
-        UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(14, 0, 180, rowHeight)];
+        UILabel *nameLabel = [[UILabel alloc] initWithFrame:CGRectMake(14, 0, 160, rowHeight)];
         nameLabel.text = cat;
         nameLabel.textColor = [UIColor whiteColor];
-        nameLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+        nameLabel.font = [UIFont fontWithName:@"HelveticaNeue" size:15] ?: [UIFont systemFontOfSize:15];
         [rowBtn addSubview:nameLabel];
 
         // Chevron ›
         UILabel *chevron = [[UILabel alloc] initWithFrame:CGRectMake(self.contentView.frame.size.width - 28, 0, 20, rowHeight)];
         chevron.text = @"›";
-        chevron.textColor = [UIColor colorWithWhite:0.85 alpha:1.0];
+        chevron.textColor = [UIColor colorWithWhite:0.9 alpha:1.0];
         chevron.font = [UIFont boldSystemFontOfSize:20];
         chevron.textAlignment = NSTextAlignmentCenter;
         [rowBtn addSubview:chevron];
@@ -304,7 +335,7 @@ static UIWindow* getKeyWindow(void) {
 }
 
 - (void)onCategorySelected:(UIButton *)sender {
-    NSArray *categories = @[@"Gameplay", @"Zoom", @"Macro", @"Indicators", @"Party", @"Visuals", @"About"];
+    NSArray *categories = @[@"Gameplay", @"Zoom", @"Macro", @"Indicators", @"Party", @"Visuals"];
     if (sender.tag < categories.count) {
         NSString *selected = categories[sender.tag];
         [self openSubCategory:selected];
@@ -312,7 +343,7 @@ static UIWindow* getKeyWindow(void) {
 }
 
 - (void)onBackTapped {
-    [UIView transitionWithView:self.contentView duration:0.2 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
+    [UIView transitionWithView:self.contentView duration:0.18 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
         [self renderCategoryList];
     } completion:nil];
 }
@@ -324,12 +355,13 @@ static UIWindow* getKeyWindow(void) {
     self.titleLabel.text = cat;
     self.backButton.hidden = NO;
 
-    [UIView transitionWithView:self.contentView duration:0.2 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
+    [UIView transitionWithView:self.contentView duration:0.18 options:UIViewAnimationOptionTransitionCrossDissolve animations:^{
         for (UIView *v in self.contentView.subviews) {
             [v removeFromSuperview];
         }
 
         UIScrollView *scrollView = [[UIScrollView alloc] initWithFrame:self.contentView.bounds];
+        scrollView.showsVerticalScrollIndicator = NO;
         scrollView.alwaysBounceVertical = YES;
         CGFloat y = 8.0;
 
@@ -364,12 +396,10 @@ static UIWindow* getKeyWindow(void) {
             y = [self addToggle:@"Dark Theme Arena" key:@"dt_darktheme" toView:scrollView atY:y];
             y = [self addToggle:@"Rainbow Mass Color" key:@"dt_rainbow" toView:scrollView atY:y];
             y = [self addToggle:@"Hide Player Names" key:@"dt_hidenames" toView:scrollView atY:y];
-        } else if ([cat isEqualToString:@"About"]) {
-            y = [self addInfoCard:@"@dtje029 Mod" sub:@"Agar.io iOS Tweak v1.0" toView:scrollView atY:y];
             y = [self addActionButton:@"Reset Settings" action:@selector(resetAllSettings) toView:scrollView atY:y];
         }
 
-        scrollView.contentSize = CGSizeMake(self.contentView.frame.size.width, y + 15.0);
+        scrollView.contentSize = CGSizeMake(self.contentView.frame.size.width, y + 10.0);
         [self.contentView addSubview:scrollView];
     } completion:nil];
 }
@@ -379,18 +409,18 @@ static UIWindow* getKeyWindow(void) {
 - (CGFloat)addToggle:(NSString *)title key:(NSString *)key toView:(UIView *)parent atY:(CGFloat)y {
     CGFloat w = self.contentView.frame.size.width;
     UIView *row = [[UIView alloc] initWithFrame:CGRectMake(8, y, w - 16, 42)];
-    row.backgroundColor = [UIColor colorWithWhite:0.16 alpha:0.6];
+    row.backgroundColor = [UIColor colorWithWhite:0.16 alpha:0.65];
     row.layer.cornerRadius = 8.0;
 
     UILabel *lbl = [[UILabel alloc] initWithFrame:CGRectMake(10, 0, w - 80, 42)];
     lbl.text = title;
     lbl.textColor = [UIColor whiteColor];
-    lbl.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    lbl.font = [UIFont systemFontOfSize:13.5 weight:UIFontWeightMedium];
     [row addSubview:lbl];
 
     UISwitch *sw = [[UISwitch alloc] initWithFrame:CGRectMake(w - 74, 6, 48, 28)];
-    sw.transform = CGAffineTransformMakeScale(0.8, 0.8);
-    sw.onTintColor = [UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:1.0]; // Orange accent
+    sw.transform = CGAffineTransformMakeScale(0.78, 0.78);
+    sw.onTintColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0]; // Orange accent
     sw.on = [[NSUserDefaults standardUserDefaults] boolForKey:key];
     sw.accessibilityIdentifier = key;
     [sw addTarget:self action:@selector(onSwitchChanged:) forControlEvents:UIControlEventValueChanged];
@@ -403,7 +433,7 @@ static UIWindow* getKeyWindow(void) {
 - (CGFloat)addSlider:(NSString *)title key:(NSString *)key min:(float)min max:(float)max def:(float)def toView:(UIView *)parent atY:(CGFloat)y {
     CGFloat w = self.contentView.frame.size.width;
     UIView *row = [[UIView alloc] initWithFrame:CGRectMake(8, y, w - 16, 56)];
-    row.backgroundColor = [UIColor colorWithWhite:0.16 alpha:0.6];
+    row.backgroundColor = [UIColor colorWithWhite:0.16 alpha:0.65];
     row.layer.cornerRadius = 8.0;
 
     float val = [[NSUserDefaults standardUserDefaults] objectForKey:key] ? [[NSUserDefaults standardUserDefaults] floatForKey:key] : def;
@@ -416,7 +446,7 @@ static UIWindow* getKeyWindow(void) {
 
     UILabel *valLbl = [[UILabel alloc] initWithFrame:CGRectMake(w - 75, 4, 55, 20)];
     valLbl.text = [NSString stringWithFormat:@"%.1fx", val];
-    valLbl.textColor = [UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:1.0];
+    valLbl.textColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
     valLbl.font = [UIFont boldSystemFontOfSize:13];
     valLbl.textAlignment = NSTextAlignmentRight;
     valLbl.tag = 999;
@@ -426,7 +456,7 @@ static UIWindow* getKeyWindow(void) {
     slider.minimumValue = min;
     slider.maximumValue = max;
     slider.value = val;
-    slider.minimumTrackTintColor = [UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:1.0];
+    slider.minimumTrackTintColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:1.0];
     slider.accessibilityIdentifier = key;
     [slider addTarget:self action:@selector(onSliderChanged:) forControlEvents:UIControlEventValueChanged];
     [row addSubview:slider];
@@ -437,40 +467,16 @@ static UIWindow* getKeyWindow(void) {
 
 - (CGFloat)addActionButton:(NSString *)title action:(SEL)action toView:(UIView *)parent atY:(CGFloat)y {
     CGFloat w = self.contentView.frame.size.width;
-    UIButton *btn = [UIButton buttonWithType:UIButtonTypeSystem];
-    btn.frame = CGRectMake(8, y, w - 16, 38);
-    btn.backgroundColor = [UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:0.9];
+    UIButton *btn = [UIButton buttonWithType:UIButtonTypeCustom];
+    btn.frame = CGRectMake(8, y, w - 16, 36);
+    btn.backgroundColor = [UIColor colorWithRed:1.0 green:0.58 blue:0.0 alpha:0.95];
     btn.layer.cornerRadius = 8.0;
     [btn setTitle:title forState:UIControlStateNormal];
     [btn setTitleColor:[UIColor blackColor] forState:UIControlStateNormal];
-    btn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
+    btn.titleLabel.font = [UIFont boldSystemFontOfSize:13.5];
     [btn addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     [parent addSubview:btn];
-    return y + 44.0;
-}
-
-- (CGFloat)addInfoCard:(NSString *)title sub:(NSString *)sub toView:(UIView *)parent atY:(CGFloat)y {
-    CGFloat w = self.contentView.frame.size.width;
-    UIView *card = [[UIView alloc] initWithFrame:CGRectMake(8, y, w - 16, 60)];
-    card.backgroundColor = [UIColor colorWithWhite:0.16 alpha:0.6];
-    card.layer.cornerRadius = 8.0;
-
-    UILabel *tLbl = [[UILabel alloc] initWithFrame:CGRectMake(10, 8, w - 36, 22)];
-    tLbl.text = title;
-    tLbl.textColor = [UIColor colorWithRed:1.0 green:0.6 blue:0.0 alpha:1.0];
-    tLbl.font = [UIFont boldSystemFontOfSize:16];
-    tLbl.textAlignment = NSTextAlignmentCenter;
-    [card addSubview:tLbl];
-
-    UILabel *sLbl = [[UILabel alloc] initWithFrame:CGRectMake(10, 32, w - 36, 18)];
-    sLbl.text = sub;
-    sLbl.textColor = [UIColor colorWithWhite:0.75 alpha:1.0];
-    sLbl.font = [UIFont systemFontOfSize:12];
-    sLbl.textAlignment = NSTextAlignmentCenter;
-    [card addSubview:sLbl];
-
-    [parent addSubview:card];
-    return y + 66.0;
+    return y + 42.0;
 }
 
 - (void)onSwitchChanged:(UISwitch *)sw {
