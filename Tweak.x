@@ -7,27 +7,40 @@ static UIButton *menuButton = nil;
 static UIView *menuView = nil;
 static BOOL menuVisible = NO;
 
-// Create floating menu button
-%hook UIWindow
+@interface MenuManager : NSObject
++ (instancetype)sharedInstance;
+- (void)createMenuButton;
+- (void)toggleMenu;
+- (void)showMenu;
+- (void)hideMenu;
+- (void)handlePan:(UIPanGestureRecognizer *)gesture;
+- (UIView *)createFeatureRow:(NSString *)name atY:(CGFloat)y;
+@end
 
-- (void)didAddSubview:(UIView *)subview {
-    %orig;
+@implementation MenuManager
 
++ (instancetype)sharedInstance {
+    static MenuManager *instance = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            [self createMenuButton];
-        });
+        instance = [[self alloc] init];
     });
+    return instance;
 }
 
-%new
 - (void)createMenuButton {
     if (menuButton) return;
 
+    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+    if (!keyWindow) {
+        keyWindow = [UIApplication sharedApplication].windows.firstObject;
+    }
+
+    if (!keyWindow) return;
+
     // Create floating button
     menuButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    menuButton.frame = CGRectMake(self.frame.size.width - 70, 100, 60, 60);
+    menuButton.frame = CGRectMake(keyWindow.frame.size.width - 70, 100, 60, 60);
     menuButton.backgroundColor = [UIColor colorWithRed:0.2 green:0.6 blue:1.0 alpha:0.9];
     menuButton.layer.cornerRadius = 30;
     menuButton.layer.borderWidth = 2;
@@ -47,20 +60,19 @@ static BOOL menuVisible = NO;
     UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
     [menuButton addGestureRecognizer:panGesture];
 
-    [self addSubview:menuButton];
+    [keyWindow addSubview:menuButton];
     menuButton.layer.zPosition = 999;
 
     NSLog(@"[dtje029] Menu button created");
 }
 
-%new
 - (void)handlePan:(UIPanGestureRecognizer *)gesture {
-    CGPoint translation = [gesture translationInView:self];
-    menuButton.center = CGPointMake(menuButton.center.x + translation.x, menuButton.center.y + translation.y);
-    [gesture setTranslation:CGPointZero inView:self];
+    UIView *view = gesture.view;
+    CGPoint translation = [gesture translationInView:view.superview];
+    view.center = CGPointMake(view.center.x + translation.x, view.center.y + translation.y);
+    [gesture setTranslation:CGPointZero inView:view.superview];
 }
 
-%new
 - (void)toggleMenu {
     if (menuVisible) {
         [self hideMenu];
@@ -69,14 +81,18 @@ static BOOL menuVisible = NO;
     }
 }
 
-%new
 - (void)showMenu {
     if (menuView) return;
 
     menuVisible = YES;
 
+    UIWindow *keyWindow = [UIApplication sharedApplication].keyWindow;
+    if (!keyWindow) {
+        keyWindow = [UIApplication sharedApplication].windows.firstObject;
+    }
+
     // Create menu view
-    menuView = [[UIView alloc] initWithFrame:CGRectMake(20, 100, self.frame.size.width - 40, 400)];
+    menuView = [[UIView alloc] initWithFrame:CGRectMake(20, 100, keyWindow.frame.size.width - 40, 400)];
     menuView.backgroundColor = [UIColor colorWithWhite:0.1 alpha:0.95];
     menuView.layer.cornerRadius = 15;
     menuView.layer.borderWidth = 2;
@@ -117,13 +133,12 @@ static BOOL menuVisible = NO;
     infoLabel.textAlignment = NSTextAlignmentCenter;
     [menuView addSubview:infoLabel];
 
-    [self addSubview:menuView];
+    [keyWindow addSubview:menuView];
     menuView.layer.zPosition = 998;
 
     NSLog(@"[dtje029] Menu opened");
 }
 
-%new
 - (UIView *)createFeatureRow:(NSString *)name atY:(CGFloat)y {
     UIView *row = [[UIView alloc] initWithFrame:CGRectMake(20, y, menuView.frame.size.width - 40, 50)];
     row.backgroundColor = [UIColor colorWithWhite:0.15 alpha:1.0];
@@ -142,7 +157,6 @@ static BOOL menuVisible = NO;
     return row;
 }
 
-%new
 - (void)hideMenu {
     if (menuView) {
         [menuView removeFromSuperview];
@@ -152,9 +166,22 @@ static BOOL menuVisible = NO;
     }
 }
 
+@end
+
+// Hook to inject menu when app launches
+%hook UIApplication
+
+- (void)applicationDidBecomeActive:(UIApplication *)application {
+    %orig;
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [[MenuManager sharedInstance] createMenuButton];
+    });
+}
+
 %end
 
 %ctor {
     NSLog(@"[dtje029] Tweak initialized for agar.io");
-    NSLog(@"[dtje029] Menu will appear in 2 seconds");
+    NSLog(@"[dtje029] Menu will appear 3 seconds after app becomes active");
 }
