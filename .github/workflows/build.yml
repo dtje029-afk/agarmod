@@ -13,11 +13,11 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Theos
       run: |
-        export THEOS=/opt/theos
+        export THEOS=$HOME/theos
         git clone --recursive https://github.com/theos/theos.git $THEOS
         echo "THEOS=$THEOS" >> $GITHUB_ENV
 
@@ -27,59 +27,93 @@ jobs:
 
     - name: Build dylib
       run: |
-        export THEOS=/opt/theos
-        make clean
+        export THEOS=$HOME/theos
+        make clean || true
         make package FINALPACKAGE=1
 
-    - name: Prepare Payload
+    - name: Verify Payload
       run: |
-        # Check if Payload exists, if not create structure
         if [ ! -d "Payload/agar.io.app" ]; then
-          echo "Warning: Base app not found in Payload directory"
-          mkdir -p Payload/agar.io.app/Frameworks
+          echo "ERROR: Base app not found in Payload directory!"
+          exit 1
         fi
+        echo "Payload verified: $(du -sh Payload)"
 
     - name: Inject dylib
       run: |
         # Extract dylib from deb
-        DEB_FILE=$(ls packages/*.deb | head -n 1)
+        DEB_FILE=$(ls packages/*.deb 2>/dev/null | head -n 1)
         if [ -f "$DEB_FILE" ]; then
+          echo "Found deb: $DEB_FILE"
           ar x "$DEB_FILE"
-          tar -xzf data.tar.* || tar -xzf data.tar.gz
+          tar -xzf data.tar.* 2>/dev/null || tar -xzf data.tar.gz || tar -xzf data.tar.lzma
 
           # Copy dylib to Payload
           mkdir -p Payload/agar.io.app/Frameworks
-          find ./Library/MobileSubstrate/DynamicLibraries -name "*.dylib" -exec cp {} Payload/agar.io.app/Frameworks/ \;
-          find ./Library/MobileSubstrate/DynamicLibraries -name "*.plist" -exec cp {} Payload/agar.io.app/Frameworks/ \;
+          DYLIB=$(find ./Library/MobileSubstrate/DynamicLibraries -name "*.dylib" 2>/dev/null | head -n 1)
+          if [ -f "$DYLIB" ]; then
+            cp "$DYLIB" Payload/agar.io.app/Frameworks/
+            echo "Dylib injected: $(basename $DYLIB)"
+            ls -lh Payload/agar.io.app/Frameworks/*.dylib
+          fi
 
-          echo "Dylib injected successfully"
+          # Copy plist if exists
+          PLIST=$(find ./Library/MobileSubstrate/DynamicLibraries -name "*.plist" 2>/dev/null | head -n 1)
+          if [ -f "$PLIST" ]; then
+            cp "$PLIST" Payload/agar.io.app/Frameworks/
+            echo "Plist copied: $(basename $PLIST)"
+          fi
+
+          # Cleanup
+          rm -f control.tar.* data.tar.* debian-binary
+        else
+          echo "ERROR: No deb file found!"
+          exit 1
         fi
 
-    - name: Setup CydiaSubstrate
+    - name: Sign dylib
       run: |
-        # Create CydiaSubstrate framework structure
-        mkdir -p Payload/agar.io.app/Frameworks/CydiaSubstrate.framework
-        echo "CydiaSubstrate framework structure created"
+        DYLIB=$(find Payload/agar.io.app/Frameworks -name "*.dylib" | grep -v CydiaSubstrate | head -n 1)
+        if [ -f "$DYLIB" ]; then
+          ldid -S "$DYLIB"
+          echo "Signed: $DYLIB"
+        fi
 
     - name: Package IPA
       run: |
-        # Create IPA
         cd Payload
-        zip -r ../agario_dtje029.ipa .
+        zip -r ../agario_dtje029.ipa . -x "*.DS_Store"
         cd ..
-        ls -lh agario_dtje029.ipa
+        echo "IPA created: $(ls -lh agario_dtje029.ipa)"
 
     - name: Upload IPA
       uses: actions/upload-artifact@v4
       with:
         name: dtje029-agario-mod
         path: agario_dtje029.ipa
+        retention-days: 30
 
     - name: Create Release
       if: github.event_name == 'push' && github.ref == 'refs/heads/main'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v1.0.${{ github.run_number }}
+        name: dtje029 Agar.io Mod v1.0.${{ github.run_number }}
+        body: |
+          ## dtje029 Agar.io Mod
+
+          ### Features:
+          - 🎮 In-game menu met floating "D" button
+          - ⚡ Speed Hack
+          - 🔍 Zoom Hack
+          - 🚫 No Ads
+          - 💪 God Mode
+
+          ### Installation:
+          1. Download `agario_dtje029.ipa`
+          2. Install met ksign/esign/TrollStore
+          3. Open agar.io
+          4. Tap de blauwe "D" button voor menu!
         files: agario_dtje029.ipa
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
